@@ -68,35 +68,126 @@
   }
 }
 
-/* Animações de transição personalizadas */
+/* 🚀 ANIMAÇÕES APENAS PARA TRANSIÇÕES DE MODO - SEM PAN */
 @layer utilities {
-  .animate-scale-in {
-    animation: scaleIn 250ms ease-out forwards;
+  /* 🎯 Transição Grid → Central (Zoom In Effect) */
+  .transition-to-central {
+    animation: transitionToCentral 250ms cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+    will-change: transform, opacity;
+    transform: translateZ(0);
   }
 
-  .animate-scale-out {
-    animation: scaleOut 250ms ease-in forwards;
+  /* 🎯 Transição Central → Grid (Zoom Out Effect) */
+  .transition-to-grid {
+    animation: transitionToGrid 250ms cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+    will-change: transform, opacity;
+    transform: translateZ(0);
+  }
+
+  /* 🎯 Fade In para novos elementos */
+  .fade-in {
+    animation: fadeIn 200ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    will-change: opacity;
+  }
+
+  /* 🎯 Fade Out para elementos que saem */
+  .fade-out {
+    animation: fadeOut 200ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    will-change: opacity;
+  }
+
+  /* 🎯 GPU-optimized container - NO PAN TRANSITIONS */
+  .gpu-container {
+    will-change: transform;
+    transform: translateZ(0);
+    contain: layout style paint;
+  }
+
+  /* 🚀 NO ZOOM TRANSITIONS - immediate feedback */
+  .zoom-immediate {
+    will-change: transform;
+    transform: translateZ(0);
+  }
+
+  /* 🎯 Optimized artboard transitions - only for hover/drag */
+  .artboard-optimized {
+    transition: transform 120ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 120ms cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform, box-shadow;
+    transform: translateZ(0);
+  }
+
+  /* 🎯 Drag overlay optimization */
+  .drag-overlay {
+    position: fixed;
+    pointer-events: none;
+    z-index: 1000;
+    will-change: transform;
+    transform: translateZ(0);
+  }
+
+  /* 🎯 Button feedback only */
+  .scale-feedback {
+    transition: transform 100ms cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform;
   }
 }
 
-@keyframes scaleIn {
-  from {
-    transform: scale(0.95);
-    opacity: 0.8;
+/* 🚀 KEYFRAMES APENAS PARA TRANSIÇÕES DE MODO */
+@keyframes transitionToCentral {
+  0% {
+    transform: translateZ(0) scale(0.85);
+    opacity: 0.7;
   }
-  to {
-    transform: scale(1);
+  50% {
+    transform: translateZ(0) scale(0.95);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateZ(0) scale(1);
     opacity: 1;
   }
 }
 
-@keyframes scaleOut {
-  from {
-    transform: scale(1.05);
+@keyframes transitionToGrid {
+  0% {
+    transform: translateZ(0) scale(1.15);
     opacity: 0.8;
   }
-  to {
-    transform: scale(1);
+  50% {
+    transform: translateZ(0) scale(1.05);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateZ(0) scale(1);
     opacity: 1;
   }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* 🎯 Button hover feedback only */
+.zoom-indicator {
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform, background-color;
+}
+
+.zoom-indicator:hover {
+  transform: scale(1.05);
+  background-color: hsl(var(--secondary));
 }

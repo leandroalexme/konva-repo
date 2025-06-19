@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useRef, useCallback, useEffect } from "react"
 import { CentralView } from "./central-view"
 import { GridView } from "./grid-view"
@@ -9,8 +8,6 @@ import { useZoomPan } from "@/hooks/use-zoom-pan"
 import { useDragDrop } from "@/hooks/use-drag-drop"
 import { useViewTransition } from "@/hooks/use-view-transition"
 import type { ViewMode, Artboard } from "@/types"
-import { calculatePanLimits, constrainPan } from "@/utils/pan-constraints"
-import { GRID_CONFIG } from "@/utils/grid-calculations"
 
 interface MainCanvasProps {
   viewMode: ViewMode
@@ -41,48 +38,35 @@ export function MainCanvas({
     pan,
     isPanning,
     lastPanPoint,
-    setZoom,
-    updatePan,
+    containerRef,
+    contentRef,
+    currentZoom,
+    currentPan,
+    isZooming,
     setIsPanning,
     setLastPanPoint,
     handleZoomAtPoint,
-    centerArtboard,
+    zoomIn,
+    zoomOut,
     resetView,
+    updatePan,
+    transitionToMode,
   } = useZoomPan()
 
-  const { dragState, startDrag, updateDrag, endDrag } = useDragDrop(artboards, reorderArtboards)
+  const { dragState, dragOverlayRef, startDrag, updateDrag, endDrag } = useDragDrop(artboards, reorderArtboards)
   const { isTransitioning, transitionState, startTransition } = useViewTransition()
 
-  // Centraliza prancheta específica no modo grid
-  const centerArtboardInGrid = useCallback(
-    (artboardIndex: number) => {
-      if (!canvasRef.current || !gridRef.current) return
-
-      const container = canvasRef.current
-      const containerWidth = container.clientWidth
-      const containerHeight = container.clientHeight
-
-      const row = Math.floor(artboardIndex / GRID_CONFIG.COLS)
-      const col = artboardIndex % GRID_CONFIG.COLS
-
-      const artboardX = col * (GRID_CONFIG.ITEM_WIDTH + GRID_CONFIG.ITEM_GAP) + GRID_CONFIG.ITEM_WIDTH / 2
-      const artboardY = row * (GRID_CONFIG.ITEM_HEIGHT + GRID_CONFIG.ITEM_GAP) + GRID_CONFIG.ITEM_HEIGHT / 2
-
-      const targetPanX = containerWidth / 2 - artboardX
-      const targetPanY = containerHeight / 2 - artboardY
-
-      updatePan({ x: targetPanX, y: targetPanY })
-    },
-    [updatePan],
-  )
-
+  // 🚀 Enhanced wheel handler with CURSOR-DIRECTED zoom for both modes
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
       if (dragState.isDragging || isTransitioning) return
       e.preventDefault()
+
       const delta = e.deltaY > 0 ? 0.9 : 1.1
       const currentArtboard = viewMode === "central" ? artboards.find((ab) => ab.id === activeArtboard) : undefined
-      handleZoomAtPoint(delta, e.clientX, e.clientY, canvasRef, currentArtboard)
+
+      // 🎯 CURSOR-DIRECTED ZOOM - zoom towards mouse cursor
+      handleZoomAtPoint(delta, e.clientX, e.clientY, canvasRef, viewMode, currentArtboard)
     },
     [handleZoomAtPoint, dragState.isDragging, isTransitioning, viewMode, artboards, activeArtboard],
   )
@@ -104,24 +88,20 @@ export function MainCanvas({
       if (isTransitioning) return
 
       if (dragState.isDragging) {
-        updateDrag(e, gridRef, zoom, pan)
+        updateDrag(e, gridRef, currentZoom, currentPan)
       } else if (isPanning) {
         const deltaX = e.clientX - lastPanPoint.x
         const deltaY = e.clientY - lastPanPoint.y
 
-        if (viewMode === "central" && canvasRef.current) {
-          const currentArtboard = artboards.find((ab) => ab.id === activeArtboard)
-          if (currentArtboard) {
-            const newPan = { x: pan.x + deltaX, y: pan.y + deltaY }
-            const rect = canvasRef.current.getBoundingClientRect()
-            const limits = calculatePanLimits(zoom, currentArtboard, rect.width, rect.height)
-            const constrainedPan = constrainPan(newPan, limits)
-            updatePan(constrainedPan)
-          }
-        } else {
-          updatePan({ x: pan.x + deltaX, y: pan.y + deltaY })
+        const newPan = {
+          x: currentPan.x + deltaX,
+          y: currentPan.y + deltaY,
         }
 
+        const currentArtboard = viewMode === "central" ? artboards.find((ab) => ab.id === activeArtboard) : undefined
+
+        // 🚀 Pan works in both modes
+        updatePan(newPan, viewMode, currentArtboard)
         setLastPanPoint({ x: e.clientX, y: e.clientY })
       }
     },
@@ -134,8 +114,8 @@ export function MainCanvas({
       viewMode,
       artboards,
       activeArtboard,
-      pan,
-      zoom,
+      currentPan,
+      currentZoom,
       updatePan,
       setLastPanPoint,
     ],
@@ -147,25 +127,42 @@ export function MainCanvas({
     setIsPanning(false)
   }, [isTransitioning, endDrag, setIsPanning])
 
+  // 🎯 Enhanced view mode change with smooth transition
   const handleViewModeChange = useCallback(
     (mode: ViewMode) => {
       if (!dragState.isDragging && !isTransitioning) {
+        const currentArtboard = artboards.find((ab) => ab.id === activeArtboard)
+
+        // 🚀 Start visual transition
         startTransition(viewMode, mode)
+
+        // 🎯 Smooth zoom/pan transition
+        transitionToMode(mode, currentArtboard)
+
+        // 🚀 Change mode
         setViewMode(mode)
       }
     },
-    [dragState.isDragging, isTransitioning, startTransition, viewMode, setViewMode],
+    [
+      dragState.isDragging,
+      isTransitioning,
+      startTransition,
+      viewMode,
+      setViewMode,
+      transitionToMode,
+      artboards,
+      activeArtboard,
+    ],
   )
 
   const handleArtboardClick = useCallback(
     (id: string) => {
       if (!dragState.isDragging && !isTransitioning) {
         setActiveArtboard(id)
-        startTransition(viewMode, "central")
-        setViewMode("central")
+        handleViewModeChange("central")
       }
     },
-    [dragState.isDragging, isTransitioning, setActiveArtboard, startTransition, viewMode, setViewMode],
+    [dragState.isDragging, isTransitioning, setActiveArtboard, handleViewModeChange],
   )
 
   const handleArtboardDragStart = useCallback(
@@ -181,65 +178,31 @@ export function MainCanvas({
     addArtboard()
   }, [isTransitioning, addArtboard])
 
+  // 🚀 Enhanced zoom handlers - center-point zoom for buttons
   const handleZoomIn = useCallback(() => {
     if (isTransitioning) return
-    if (viewMode === "central" && canvasRef.current) {
-      const currentArtboard = artboards.find((ab) => ab.id === activeArtboard)
-      if (currentArtboard) {
-        const rect = canvasRef.current.getBoundingClientRect()
-        const centerX = rect.width / 2
-        const centerY = rect.height / 2
-        handleZoomAtPoint(1.1, centerX, centerY, canvasRef, currentArtboard)
-      }
-    } else {
-      setZoom((prev) => Math.min(5, prev * 1.1))
-    }
-  }, [viewMode, artboards, activeArtboard, handleZoomAtPoint, setZoom, isTransitioning])
+    const currentArtboard = viewMode === "central" ? artboards.find((ab) => ab.id === activeArtboard) : undefined
+    zoomIn(viewMode, currentArtboard)
+  }, [isTransitioning, viewMode, artboards, activeArtboard, zoomIn])
 
   const handleZoomOut = useCallback(() => {
     if (isTransitioning) return
-    if (viewMode === "central" && canvasRef.current) {
-      const currentArtboard = artboards.find((ab) => ab.id === activeArtboard)
-      if (currentArtboard) {
-        const rect = canvasRef.current.getBoundingClientRect()
-        const centerX = rect.width / 2
-        const centerY = rect.height / 2
-        handleZoomAtPoint(0.9, centerX, centerY, canvasRef, currentArtboard)
-      }
-    } else {
-      setZoom((prev) => Math.max(0.1, prev * 0.9))
-    }
-  }, [viewMode, artboards, activeArtboard, handleZoomAtPoint, setZoom, isTransitioning])
+    const currentArtboard = viewMode === "central" ? artboards.find((ab) => ab.id === activeArtboard) : undefined
+    zoomOut(viewMode, currentArtboard)
+  }, [isTransitioning, viewMode, artboards, activeArtboard, zoomOut])
 
-  const handleFitToScreen = useCallback(() => {
+  const handleResetView = useCallback(() => {
     if (isTransitioning) return
-    if (viewMode === "central") {
-      const currentArtboard = artboards.find((ab) => ab.id === activeArtboard)
-      if (currentArtboard) {
-        centerArtboard(currentArtboard, canvasRef)
-      }
-    } else {
-      resetView()
-    }
-  }, [isTransitioning, viewMode, artboards, activeArtboard, centerArtboard, resetView])
+    resetView(viewMode)
+  }, [isTransitioning, resetView, viewMode])
 
-  // Ajustes pós-transição
+  // 🎯 Set refs for zoom/pan hook
   useEffect(() => {
-    if (!isTransitioning) {
-      if (viewMode === "grid") {
-        setZoom(1)
-        const targetIndex = artboards.findIndex((ab) => ab.id === activeArtboard)
-        if (targetIndex !== -1) {
-          setTimeout(() => centerArtboardInGrid(targetIndex), 50)
-        }
-      } else if (viewMode === "central") {
-        const currentArtboard = artboards.find((ab) => ab.id === activeArtboard)
-        if (currentArtboard) {
-          setTimeout(() => centerArtboard(currentArtboard, canvasRef), 50)
-        }
-      }
+    containerRef.current = canvasRef.current
+    if (viewMode === "grid") {
+      contentRef.current = gridRef.current
     }
-  }, [viewMode, isTransitioning, activeArtboard, artboards, setZoom, centerArtboardInGrid, centerArtboard])
+  }, [containerRef, contentRef, viewMode])
 
   if (viewMode === "central") {
     const currentArtboard = artboards.find((ab) => ab.id === activeArtboard)
@@ -250,13 +213,14 @@ export function MainCanvas({
         artboard={currentArtboard}
         zoom={zoom}
         pan={pan}
+        isZooming={isZooming}
         isTransitioning={isTransitioning}
         transitionState={transitionState}
         canvasRef={canvasRef}
+        contentRef={contentRef}
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
-        onResetView={() => resetView()}
-        onFitToScreen={handleFitToScreen}
+        onResetView={handleResetView}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -270,8 +234,10 @@ export function MainCanvas({
       artboards={artboards}
       activeArtboard={activeArtboard}
       dragState={dragState}
+      dragOverlayRef={dragOverlayRef}
       zoom={zoom}
       pan={pan}
+      isZooming={isZooming}
       isTransitioning={isTransitioning}
       transitionState={transitionState}
       viewMode={viewMode}
@@ -279,8 +245,7 @@ export function MainCanvas({
       gridRef={gridRef}
       onZoomIn={handleZoomIn}
       onZoomOut={handleZoomOut}
-      onResetView={() => resetView()}
-      onFitToScreen={handleFitToScreen}
+      onResetView={handleResetView}
       onViewModeChange={handleViewModeChange}
       onArtboardClick={handleArtboardClick}
       onArtboardDragStart={handleArtboardDragStart}

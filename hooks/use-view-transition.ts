@@ -17,9 +17,14 @@ export function useViewTransition() {
 
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  const startTransition = useCallback((fromMode: ViewMode, toMode: ViewMode) => {
-    // Limpar timeout anterior
-    if (timeoutRef.current) {
+  const startTransition = useCallback(
+    (
+      fromMode: ViewMode,
+      toMode: ViewMode,
+      onTransitionComplete?: (toMode: ViewMode) => void
+    ) => {
+      // Limpar timeout anterior
+      if (timeoutRef.current) {
       clearTimeout(timeoutRef.current)
     }
 
@@ -39,8 +44,13 @@ export function useViewTransition() {
         fromMode: null,
         toMode: null,
       })
-    }, 300)
-  }, [])
+      if (onTransitionComplete) {
+        onTransitionComplete(toMode)
+      }
+    },
+    300
+  )
+ }, [])
 
   useEffect(() => {
     return () => {

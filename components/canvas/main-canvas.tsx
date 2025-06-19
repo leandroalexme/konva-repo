@@ -65,15 +65,17 @@ export function MainCanvas({
       const row = Math.floor(artboardIndex / GRID_CONFIG.COLS)
       const col = artboardIndex % GRID_CONFIG.COLS
 
-      const artboardX = col * (GRID_CONFIG.ITEM_WIDTH + GRID_CONFIG.ITEM_GAP) + GRID_CONFIG.ITEM_WIDTH / 2
-      const artboardY = row * (GRID_CONFIG.ITEM_HEIGHT + GRID_CONFIG.ITEM_GAP) + GRID_CONFIG.ITEM_HEIGHT / 2
+      const artboardX =
+        col * (GRID_CONFIG.ITEM_WIDTH + GRID_CONFIG.ITEM_GAP) * zoom + (GRID_CONFIG.ITEM_WIDTH * zoom) / 2
+      const artboardY =
+        row * (GRID_CONFIG.ITEM_HEIGHT + GRID_CONFIG.ITEM_GAP) * zoom + (GRID_CONFIG.ITEM_HEIGHT * zoom) / 2
 
       const targetPanX = containerWidth / 2 - artboardX
       const targetPanY = containerHeight / 2 - artboardY
 
       updatePan({ x: targetPanX, y: targetPanY })
     },
-    [updatePan],
+    [updatePan, zoom],
   )
 
   const handleWheel = useCallback(
@@ -150,22 +152,61 @@ export function MainCanvas({
   const handleViewModeChange = useCallback(
     (mode: ViewMode) => {
       if (!dragState.isDragging && !isTransitioning) {
-        startTransition(viewMode, mode)
+        startTransition(viewMode, mode, (newMode) => {
+          if (newMode === "grid") {
+            setZoom(1)
+            const targetIndex = artboards.findIndex((ab) => ab.id === activeArtboard)
+            if (targetIndex !== -1) {
+              centerArtboardInGrid(targetIndex)
+            }
+          } else if (newMode === "central") {
+            const currentArtboard = artboards.find((ab) => ab.id === activeArtboard)
+            if (currentArtboard) {
+              centerArtboard(currentArtboard, canvasRef)
+            }
+          }
+        })
         setViewMode(mode)
       }
     },
-    [dragState.isDragging, isTransitioning, startTransition, viewMode, setViewMode],
+    [
+      dragState.isDragging,
+      isTransitioning,
+      startTransition,
+      viewMode,
+      setViewMode,
+      artboards,
+      activeArtboard,
+      setZoom,
+      centerArtboardInGrid,
+      centerArtboard,
+    ],
   )
 
   const handleArtboardClick = useCallback(
     (id: string) => {
       if (!dragState.isDragging && !isTransitioning) {
         setActiveArtboard(id)
-        startTransition(viewMode, "central")
+        startTransition(viewMode, "central", (_newMode) => {
+          // _newMode will always be "central" here
+          const currentArtboard = artboards.find((ab) => ab.id === id) // Use id directly
+          if (currentArtboard) {
+            centerArtboard(currentArtboard, canvasRef)
+          }
+        })
         setViewMode("central")
       }
     },
-    [dragState.isDragging, isTransitioning, setActiveArtboard, startTransition, viewMode, setViewMode],
+    [
+      dragState.isDragging,
+      isTransitioning,
+      setActiveArtboard,
+      startTransition,
+      viewMode,
+      setViewMode,
+      artboards, // Add artboards to dependency array
+      centerArtboard, // Add centerArtboard to dependency array
+    ],
   )
 
   const handleArtboardDragStart = useCallback(
@@ -191,10 +232,13 @@ export function MainCanvas({
         const centerY = rect.height / 2
         handleZoomAtPoint(1.1, centerX, centerY, canvasRef, currentArtboard)
       }
-    } else {
-      setZoom((prev) => Math.min(5, prev * 1.1))
+    } else if (viewMode === "grid" && canvasRef.current) {
+      const rect = canvasRef.current.getBoundingClientRect()
+      const centerX = rect.width / 2
+      const centerY = rect.height / 2
+      handleZoomAtPoint(1.1, centerX, centerY, canvasRef)
     }
-  }, [viewMode, artboards, activeArtboard, handleZoomAtPoint, setZoom, isTransitioning])
+  }, [viewMode, artboards, activeArtboard, handleZoomAtPoint, isTransitioning, canvasRef])
 
   const handleZoomOut = useCallback(() => {
     if (isTransitioning) return
@@ -206,10 +250,13 @@ export function MainCanvas({
         const centerY = rect.height / 2
         handleZoomAtPoint(0.9, centerX, centerY, canvasRef, currentArtboard)
       }
-    } else {
-      setZoom((prev) => Math.max(0.1, prev * 0.9))
+    } else if (viewMode === "grid" && canvasRef.current) {
+      const rect = canvasRef.current.getBoundingClientRect()
+      const centerX = rect.width / 2
+      const centerY = rect.height / 2
+      handleZoomAtPoint(0.9, centerX, centerY, canvasRef)
     }
-  }, [viewMode, artboards, activeArtboard, handleZoomAtPoint, setZoom, isTransitioning])
+  }, [viewMode, artboards, activeArtboard, handleZoomAtPoint, isTransitioning, canvasRef])
 
   const handleFitToScreen = useCallback(() => {
     if (isTransitioning) return
@@ -224,22 +271,23 @@ export function MainCanvas({
   }, [isTransitioning, viewMode, artboards, activeArtboard, centerArtboard, resetView])
 
   // Ajustes pós-transição
-  useEffect(() => {
-    if (!isTransitioning) {
-      if (viewMode === "grid") {
-        setZoom(1)
-        const targetIndex = artboards.findIndex((ab) => ab.id === activeArtboard)
-        if (targetIndex !== -1) {
-          setTimeout(() => centerArtboardInGrid(targetIndex), 50)
-        }
-      } else if (viewMode === "central") {
-        const currentArtboard = artboards.find((ab) => ab.id === activeArtboard)
-        if (currentArtboard) {
-          setTimeout(() => centerArtboard(currentArtboard, canvasRef), 50)
-        }
-      }
-    }
-  }, [viewMode, isTransitioning, activeArtboard, artboards, setZoom, centerArtboardInGrid, centerArtboard])
+  // This useEffect is no longer needed as centering is handled by the transition callback.
+  // useEffect(() => {
+  //   if (!isTransitioning) {
+  //     if (viewMode === "grid") {
+  //       setZoom(1)
+  //       const targetIndex = artboards.findIndex((ab) => ab.id === activeArtboard)
+  //       if (targetIndex !== -1) {
+  //         setTimeout(() => centerArtboardInGrid(targetIndex), 50)
+  //       }
+  //     } else if (viewMode === "central") {
+  //       const currentArtboard = artboards.find((ab) => ab.id === activeArtboard)
+  //       if (currentArtboard) {
+  //         setTimeout(() => centerArtboard(currentArtboard, canvasRef), 50)
+  //       }
+  //     }
+  //   }
+  // }, [viewMode, isTransitioning, activeArtboard, artboards, setZoom, centerArtboardInGrid, centerArtboard])
 
   if (viewMode === "central") {
     const currentArtboard = artboards.find((ab) => ab.id === activeArtboard)
